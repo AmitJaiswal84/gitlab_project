@@ -1,0 +1,69 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  IMAGE_NAME: "nodejs-app"
+
+# ==========================
+# Build Docker Image
+# ==========================
+build:
+  stage: build
+
+  script:
+    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+    - docker tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA $IMAGE_NAME:latest
+
+    # Save image for deployment
+    - docker save $IMAGE_NAME:latest | gzip > nodejs-app.tar.gz
+
+  artifacts:
+    paths:
+      - nodejs-app.tar.gz
+    expire_in: 1 hour
+
+  only:
+    - main
+
+
+# ==========================
+# Deploy
+# ==========================
+deploy:
+  stage: deploy
+
+  before_script:
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
+
+  script:
+
+    # Copy Docker image to server
+    - scp nodejs-app.tar.gz $SERVER_USER@$SERVER_HOST:/tmp/
+
+    # Deploy
+    - |
+      ssh $SERVER_USER@$SERVER_HOST << EOF
+
+      docker load < /tmp/nodejs-app.tar.gz
+
+      docker stop nodejs-app || true
+      docker rm nodejs-app || true
+
+      docker run -d \
+        --name nodejs-app \
+        --restart unless-stopped \
+        -p 80:80 \
+        nodejs-app:latest
+
+      rm -f /tmp/nodejs-app.tar.gz
+
+      docker image prune -f
+
+      EOF
+
+  only:
+    - main

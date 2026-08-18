@@ -17,3 +17,20 @@ SSH_PRIVATE_KEY = <private SSH key>
 Before the first GitLab deployment, run this once on the server:
 
 mkdir -p /opt/nodejs-app
+
+
+===================Copy your Compose and Nginx files to the server:===================
+
+/opt/nodejs-app/
+├── docker-compose.yml
+└── nginx.conf
+
+You can do this manually initially.
+
+The GitLab pipeline will then copy:
+
+nodejs-app.tar.gz
+
+to:
+
+/opt/nodejs-app/

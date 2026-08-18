@@ -2,20 +2,24 @@ stages:
   - build
   - deploy
 
+
 variables:
   IMAGE_NAME: "nodejs-app"
 
-# ==========================
+
+# ==========================================
 # Build Docker Image
-# ==========================
+# ==========================================
 build:
   stage: build
 
   script:
-    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
-    - docker tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA $IMAGE_NAME:latest
+    - echo "Building Docker image..."
 
-    # Save image for deployment
+    - docker build -t $IMAGE_NAME:latest .
+
+    - echo "Saving Docker image..."
+
     - docker save $IMAGE_NAME:latest | gzip > nodejs-app.tar.gz
 
   artifacts:
@@ -27,9 +31,9 @@ build:
     - main
 
 
-# ==========================
-# Deploy
-# ==========================
+# ==========================================
+# Deploy to Server
+# ==========================================
 deploy:
   stage: deploy
 
@@ -37,31 +41,48 @@ deploy:
     - mkdir -p ~/.ssh
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts
+    - ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
 
   script:
 
-    # Copy Docker image to server
-    - scp nodejs-app.tar.gz $SERVER_USER@$SERVER_HOST:/tmp/
+    - echo "Copying Docker image to server..."
 
-    # Deploy
+    - scp nodejs-app.tar.gz \
+        $SERVER_USER@$SERVER_HOST:/opt/nodejs-app/
+
+
+    - echo "Deploying application..."
+
     - |
-      ssh $SERVER_USER@$SERVER_HOST << EOF
+      ssh $SERVER_USER@$SERVER_HOST << 'EOF'
 
-      docker load < /tmp/nodejs-app.tar.gz
+      set -e
 
-      docker stop nodejs-app || true
-      docker rm nodejs-app || true
+      cd /opt/nodejs-app
 
-      docker run -d \
-        --name nodejs-app \
-        --restart unless-stopped \
-        -p 80:80 \
-        nodejs-app:latest
+      echo "Loading Docker image..."
 
-      rm -f /tmp/nodejs-app.tar.gz
+      docker load < nodejs-app.tar.gz
+
+      echo "Stopping old containers..."
+
+      docker compose down
+
+      echo "Starting new containers..."
+
+      docker compose up -d
+
+      echo "Removing temporary image file..."
+
+      rm -f nodejs-app.tar.gz
+
+      echo "Removing unused Docker images..."
 
       docker image prune -f
+
+      echo "Deployment completed."
+
+      docker compose ps
 
       EOF
 

@@ -1,9 +1,11 @@
 node_modules
-dist
+npm-debug.log
 .git
 .gitlab
 .gitlab-ci.yml
 Dockerfile
+docker-compose.yml
+.dockerignore
 .env
 .env.*
-npm-debug.log
+coverage
